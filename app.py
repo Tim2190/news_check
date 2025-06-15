@@ -3,11 +3,18 @@ import requests
 from bs4 import BeautifulSoup
 import feedparser
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
+from urllib.parse import urlparse, quote
 from difflib import SequenceMatcher
 import dateparser
-from urllib.parse import urlparse
 
+# Попробуем загрузить KeyBERT, иначе используем TF-IDF
+USE_KEYBERT = False
+try:
+    from keybert import KeyBERT
+    keybert_model = KeyBERT('all-MiniLM-L6-v2')
+    USE_KEYBERT = True
+except ImportError:
+    from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 
 def fetch_text_from_url(url: str) -> str:
     """Parse article text from URL using BeautifulSoup."""
@@ -32,21 +39,30 @@ def fetch_text_from_url(url: str) -> str:
 
 
 def extract_key_phrases(text: str, n: int = 5) -> list:
-    """Extract key phrases from text using TF-IDF."""
-    vectorizer = TfidfVectorizer(stop_words='russian')
+    """Extract key phrases using KeyBERT or TF-IDF."""
     try:
-        tfidf = vectorizer.fit_transform([text])
-    except ValueError:
+        if USE_KEYBERT:
+            keywords = keybert_model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='russian', top_n=n)
+            return [kw for kw, _ in keywords]
+        else:
+            sentences = text.split('.')
+            if len(sentences) < 2:
+                sentences = [text, text]
+            vectorizer = CountVectorizer(stop_words='russian', ngram_range=(1, 2))
+            counts = vectorizer.fit_transform(sentences)
+            tfidf = TfidfTransformer().fit_transform(counts)
+            scores = tfidf.toarray().sum(axis=0)
+            terms = vectorizer.get_feature_names_out()
+            sorted_items = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
+            return [term for term, _ in sorted_items[:n]]
+    except Exception as e:
+        print(f"[ERROR in extract_key_phrases]: {e}")
         return []
-    scores = zip(vectorizer.get_feature_names_out(), tfidf.toarray()[0])
-    sorted_terms = sorted(scores, key=lambda x: x[1], reverse=True)
-    phrases = [term for term, _ in sorted_terms[:n]]
-    return phrases
 
 
 def search_google_news(phrase: str) -> list:
     """Search Google News RSS for the phrase and return entries."""
-    query = requests.utils.quote(phrase)
+    query = quote(phrase)
     url = f"https://news.google.com/rss/search?q={query}&hl=ru&gl=KZ&ceid=KZ:ru"
     feed = feedparser.parse(url)
     return feed.entries
@@ -93,7 +109,8 @@ def process_search(article_text: str, phrases: list) -> pd.DataFrame:
     return df.drop(columns=['similarity_value', 'date_value'])
 
 
-st.title('Определение первоисточника публикации')
+# Streamlit UI
+st.title('🔍 Определение первоисточника публикации')
 
 input_url = st.text_input('Ссылка на статью')
 input_text = st.text_area('Или вставьте текст публикации')
