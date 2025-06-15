@@ -3,5 +3,8 @@ requests
 beautifulsoup4
 feedparser
 pandas
-scikit-learn
 dateparser
+scikit-learn
+sentence-transformers
+keybert
+
