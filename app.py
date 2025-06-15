@@ -49,19 +49,26 @@ def extract_key_phrases(text: str, n: int = 5) -> list:
                 top_n=n
             )
             return [kw for kw, _ in keywords if kw.strip()]
-        else:
-            # Fallback: разбиваем текст для TF-IDF
-            sentences = [s.strip() for s in text.split('.') if len(s.strip().split()) > 3]
-            if len(sentences) < 2:
-                sentences = [text, text]  # дублируем для имитации корпуса
 
-            vectorizer = CountVectorizer(stop_words='russian', ngram_range=(1, 2))
-            counts = vectorizer.fit_transform(sentences)
-            tfidf = TfidfTransformer().fit_transform(counts)
-            scores = tfidf.toarray().sum(axis=0)
-            terms = vectorizer.get_feature_names_out()
-            sorted_items = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
-            return [term for term, _ in sorted_items[:n]]
+        # Fallback implementation
+        if len(text.strip().split()) < 10:
+            return []
+
+        sentences = [s.strip() for s in text.split('.') if len(s.strip().split()) > 3]
+        if len(sentences) < 2:
+            sentences = [text, text]
+
+        vectorizer = CountVectorizer(stop_words='russian', ngram_range=(1, 2))
+        counts = vectorizer.fit_transform(sentences)
+
+        if counts.shape[1] == 0:
+            return []
+
+        tfidf = TfidfTransformer().fit_transform(counts)
+        scores = tfidf.toarray().sum(axis=0)
+        terms = vectorizer.get_feature_names_out()
+        sorted_items = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
+        return [term for term, _ in sorted_items[:n]]
     except Exception as e:
         print(f"[ERROR in extract_key_phrases]: {e}")
         return []

@@ -30,3 +30,5 @@ Dependencies are limited to open web sources and RSS feeds only.
 For better keyword extraction you can install `sentence-transformers`
 and `keybert` once they support your Python version. Until then the
 application will fall back to a simple TF‑IDF based extractor.
+The fallback uses unigrams and bigrams with Russian stop words and
+is designed not to fail on very short texts.
