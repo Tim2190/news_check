@@ -39,15 +39,22 @@ def fetch_text_from_url(url: str) -> str:
 
 
 def extract_key_phrases(text: str, n: int = 5) -> list:
-    """Extract key phrases using KeyBERT or TF-IDF."""
+    """Extract key phrases using KeyBERT or TF-IDF fallback."""
     try:
         if USE_KEYBERT:
-            keywords = keybert_model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='russian', top_n=n)
-            return [kw for kw, _ in keywords]
+            keywords = keybert_model.extract_keywords(
+                text,
+                keyphrase_ngram_range=(1, 2),
+                stop_words='russian',
+                top_n=n
+            )
+            return [kw for kw, _ in keywords if kw.strip()]
         else:
-            sentences = text.split('.')
+            # Fallback: разбиваем текст для TF-IDF
+            sentences = [s.strip() for s in text.split('.') if len(s.strip().split()) > 3]
             if len(sentences) < 2:
-                sentences = [text, text]
+                sentences = [text, text]  # дублируем для имитации корпуса
+
             vectorizer = CountVectorizer(stop_words='russian', ngram_range=(1, 2))
             counts = vectorizer.fit_transform(sentences)
             tfidf = TfidfTransformer().fit_transform(counts)
