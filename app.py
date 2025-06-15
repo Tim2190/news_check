@@ -7,6 +7,14 @@ from urllib.parse import urlparse, quote
 from difflib import SequenceMatcher
 import dateparser
 
+# Встроенный список русских стоп-слов
+RUSSIAN_STOPWORDS = [
+    "и", "в", "во", "не", "что", "он", "на", "я", "с", "со", "как",
+    "а", "то", "все", "она", "так", "его", "но", "да", "ты", "к",
+    "у", "же", "вы", "за", "бы", "по", "только", "ее", "мне", "было",
+    "вот", "от", "меня", "еще", "нет", "о", "из", "ему", "теперь"
+]
+
 # Попробуем загрузить KeyBERT, иначе используем TF-IDF
 USE_KEYBERT = False
 try:
@@ -45,7 +53,7 @@ def extract_key_phrases(text: str, n: int = 5) -> list:
             keywords = keybert_model.extract_keywords(
                 text,
                 keyphrase_ngram_range=(1, 2),
-                stop_words='russian',
+                stop_words=RUSSIAN_STOPWORDS,
                 top_n=n
             )
             return [kw for kw, _ in keywords if kw.strip()]
@@ -58,7 +66,7 @@ def extract_key_phrases(text: str, n: int = 5) -> list:
         if len(sentences) < 2:
             sentences = [text, text]
 
-        vectorizer = CountVectorizer(stop_words='russian', ngram_range=(1, 2))
+        vectorizer = CountVectorizer(stop_words=RUSSIAN_STOPWORDS, ngram_range=(1, 2))
         counts = vectorizer.fit_transform(sentences)
 
         if counts.shape[1] == 0:
