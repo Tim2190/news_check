@@ -14,7 +14,7 @@ import dotenv
 dotenv.load_dotenv()
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
-HF_EMBEDDING_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+HF_EMBEDDING_URL = "https://api-inference.huggingface.co/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 
@@ -41,6 +41,9 @@ def fetch_text_from_url(url: str) -> str:
 
 def get_embedding(text: str) -> list:
     try:
+        print(f"[DEBUG] token loaded: {HF_API_TOKEN[:10]}")
+        print(f"[DEBUG] headers: {HEADERS}")
+        print(f"[DEBUG] sample input: {text[:100]}")
         response = requests.post(HF_EMBEDDING_URL, headers=HEADERS, json={"inputs": text[:500]})
         print(f"[HF DEBUG] Status: {response.status_code}")
         if response.status_code == 200:
