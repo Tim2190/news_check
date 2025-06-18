@@ -30,20 +30,41 @@ def fetch_text_from_url(url: str) -> str:
         return ""
 
 def summarize_text(text: str) -> str:
+    cleaned = text.strip().replace('\n', ' ')
+    words = cleaned.split()
+    word_count = len(words)
+    print(f"[SUMMARY] Word count: {word_count}")
+
+    if word_count < 30:
+        print("[SUMMARY FALLBACK] Текст слишком короткий, возвращаем как есть.")
+        return cleaned
+
+    if word_count > 800:
+        print(f"[SUMMARY TRUNCATED] Исходный текст обрезан с {word_count} до 800 слов.")
+        cleaned = ' '.join(words[:800])
+
     try:
-        response = requests.post(HF_SUMMARIZER_URL, headers=HEADERS, json={"inputs": text[:1024]})
+        response = requests.post(HF_SUMMARIZER_URL, headers=HEADERS, json={"inputs": cleaned})
+        print(f"[SUMMARY STATUS] {response.status_code}")
         if response.status_code == 200:
-            return response.json()[0]['summary_text']
+            result = response.json()
+            if isinstance(result, list) and result and 'summary_text' in result[0]:
+                print("[SUMMARY OK]", result[0]['summary_text'][:100])
+                return result[0]['summary_text']
+            else:
+                print(f"[SUMMARY FORMAT ERROR] {result}")
+                return cleaned
         else:
             print(f"[SUMMARY ERROR] {response.text}")
-            return ""
+            return cleaned
     except Exception as e:
         print(f"[SUMMARY EXCEPTION] {e}")
-        return ""
+        return cleaned
 
 def get_embedding(text: str) -> list:
     try:
         response = requests.post(HF_EMBEDDING_URL, headers=HEADERS, json={"inputs": text[:512]})
+        print(f"[EMBEDDING STATUS] {response.status_code}")
         if response.status_code == 200:
             return response.json()[0]
         else:
@@ -69,6 +90,7 @@ def search_google_news(query: str) -> list:
     return feed.entries
 
 def process_semantic_search(article_text: str) -> pd.DataFrame:
+    print("[PROCESS] Запуск обработки статьи...")
     summary = summarize_text(article_text)
     if not summary:
         st.warning("Не удалось сделать краткое содержание текста")
@@ -92,10 +114,12 @@ def process_semantic_search(article_text: str) -> pd.DataFrame:
         if not pub_date or (datetime.now() - pub_date.replace(tzinfo=None) > timedelta(days=5)):
             continue
         fetched = fetch_text_from_url(link)
+        print(f"[PARSE DEBUG] {link} -> {len(fetched)} символов")
         if not fetched or len(fetched) < 100:
             continue
         cmp_embed = get_embedding(fetched)
         sim = cosine_similarity(base_embed, cmp_embed)
+        print(f"[SIM DEBUG] Сходство с '{entry.get('title', '')[:40]}...': {sim:.4f}")
         if sim < 0.3:
             continue
         records.append({
