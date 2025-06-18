@@ -15,8 +15,8 @@ dotenv.load_dotenv()
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
 # Endpoints
-HF_EMBEDDING_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
-HF_SUMMARIZER_URL = "https://api-inference.huggingface.co/models/csebuetnlp/mT5_multilingual_XLSum"
+HF_EMBEDDING_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
+HF_SUMMARIZER_URL = "https://api-inference.huggingface.co/models/knkarthick/MEETING_SUMMARY"
 HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 def fetch_text_from_url(url: str) -> str:
