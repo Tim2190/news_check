@@ -137,7 +137,7 @@ def process_search(article_text: str, phrases: list) -> pd.DataFrame:
             date = dateparser.parse(published)
             if not date:
                 continue
-            if datetime.now() - date > timedelta(days=3):
+            if date and datetime.now() - date.replace(tzinfo=None) > timedelta(days=3):
                 continue
             snippet = entry.get('title', '')
             fetched_text = fetch_text_from_url(link)
