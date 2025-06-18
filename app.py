@@ -7,6 +7,8 @@ from urllib.parse import urlparse, quote
 from difflib import SequenceMatcher
 import dateparser
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+import re
+from datetime import datetime, timedelta
 
 # Встроенный список русских стоп-слов
 RUSSIAN_STOPWORDS = [
@@ -39,6 +41,37 @@ def fetch_text_from_url(url: str) -> str:
     return '\n'.join(texts)
 
 
+def extract_additional_phrases(text: str) -> list:
+    """Extract simple patterns from short news text."""
+    extra = []
+    # фамилия + должность
+    for m in re.findall(r"([А-ЯЁ][а-яё]+)\s+(?:[\w-]+\s+)?(президент|премьер|министр|глава|депутат|сенатор|мэр|губернатор|директор|председатель)", text, flags=re.I):
+        extra.append(f"{m[0]} {m[1]}")
+    # встреча A и B
+    for m in re.findall(r"встреча\s+([А-ЯЁ][а-яё]+)\s+и\s+([А-ЯЁ][а-яё]+)", text, flags=re.I):
+        extra.append(f"встреча {m[0]} и {m[1]}")
+    # визит в город
+    for m in re.findall(r"визит\s+в\s+([А-ЯЁ][а-яё]+)", text, flags=re.I):
+        extra.append(f"визит в {m}")
+    return extra
+
+
+def filter_noise_phrases(phrases: list) -> list:
+    banned_words = {"президента", "казахстана", "владимира"}
+    endings = ("а", "я", "у", "ю", "е", "о", "ом", "ой", "ем", "ам", "ях", "ью", "ов", "ев")
+    result = []
+    for p in phrases:
+        words = p.split()
+        if len(words) == 1:
+            w = words[0].lower()
+            if w in banned_words:
+                continue
+            if len(w) < 5 or w.endswith(endings):
+                continue
+        result.append(p)
+    return result
+
+
 def extract_key_phrases(text: str, n: int = 5) -> list:
     try:
         if len(text.strip().split()) < 10:
@@ -59,6 +92,12 @@ def extract_key_phrases(text: str, n: int = 5) -> list:
         terms = vectorizer.get_feature_names_out()
         sorted_items = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
         phrases = [term for term, _ in sorted_items[:n]]
+        # manually expand phrases for short texts
+        if len(text.split()) < 100:
+            extras = extract_additional_phrases(text)
+            if extras:
+                phrases.extend(extras)
+        phrases = list(dict.fromkeys(filter_noise_phrases(phrases)))
         return phrases
     except Exception as e:
         print(f"[ERROR in extract_key_phrases]: {e}")
@@ -83,15 +122,23 @@ def process_search(article_text: str, phrases: list) -> pd.DataFrame:
     unique_phrases = list({p for p in phrases if len(p.strip()) > 2})
 
     for phrase in unique_phrases:
-        print(f"\n🔍 Поисковая фраза: {phrase}")
         entries = search_google_news(phrase)
+        print(f"[🔍 Поиск]: \"{phrase}\" → найдено {len(entries)} результатов")
+        for e in entries[:5]:
+            print(f"    → {e.get('title')} — {e.get('link')}")
         for entry in entries[:10]:
             link = entry.get('link')
             if not link or link in seen_urls:
                 continue
             seen_urls.add(link)
             published = entry.get('published', '')
+            if not published:
+                continue
             date = dateparser.parse(published)
+            if not date:
+                continue
+            if datetime.now() - date > timedelta(days=3):
+                continue
             snippet = entry.get('title', '')
             fetched_text = fetch_text_from_url(link)
             if not fetched_text:
@@ -99,7 +146,7 @@ def process_search(article_text: str, phrases: list) -> pd.DataFrame:
             similarity = compute_similarity(article_text, fetched_text)
             print(f"→ Заголовок: {snippet}")
             print(f"→ Сходство: {similarity:.3f}")
-            if similarity < 0.5:
+            if similarity < 0.3:
                 continue
             records.append({
                 'Источник': urlparse(link).netloc,
