@@ -3,12 +3,7 @@ requests
 beautifulsoup4
 feedparser
 pandas
-dateparser
 scikit-learn
-# The following libraries rely on PyTorch and currently do not
-# provide wheels for Python 3.13. They are optional and used only
-# for improved keyword extraction. When they gain Python 3.13
-# support, you can install them manually:
-# sentence-transformers
-# keybert
-
+python-dotenv
+transformers
+dateparser
