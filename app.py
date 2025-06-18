@@ -42,11 +42,16 @@ def fetch_text_from_url(url: str) -> str:
 def get_embedding(text: str) -> list:
     try:
         response = requests.post(HF_EMBEDDING_URL, headers=HEADERS, json={"inputs": text[:500]})
+        print(f"[HF DEBUG] Status: {response.status_code}")
         if response.status_code == 200:
-            return response.json()[0]  # список флоатов
+            output = response.json()
+            print(f"[HF DEBUG] Output sample: {output[0][:5] if isinstance(output, list) else output}")
+            return output[0] if isinstance(output, list) else []
         else:
+            print(f"[HF ERROR] {response.text}")
             return []
-    except:
+    except Exception as e:
+        print(f"[HF EXCEPTION] {e}")
         return []
 
 
@@ -63,12 +68,14 @@ def search_google_news(text: str) -> list:
     query = quote(text[:100])
     url = f"https://news.google.com/rss/search?q={query}&hl=ru&gl=KZ&ceid=KZ:ru"
     feed = feedparser.parse(url)
+    print(f"[RSS DEBUG] Найдено {len(feed.entries)} публикаций по запросу: {query}")
     return feed.entries
 
 
 def process_semantic_search(article_text: str) -> pd.DataFrame:
     base_embed = get_embedding(article_text)
     if not base_embed:
+        st.warning("Embedding пустой. Проверь API или токен.")
         return pd.DataFrame()
 
     records = []
@@ -84,11 +91,13 @@ def process_semantic_search(article_text: str) -> pd.DataFrame:
         if not pub_date or (datetime.now() - pub_date.replace(tzinfo=None) > timedelta(days=3)):
             continue
         fetched = fetch_text_from_url(link)
+        print(f"[PARSE DEBUG] Длина текста с {link}: {len(fetched)}")
         if not fetched or len(fetched) < 100:
             continue
         cmp_embed = get_embedding(fetched[:500])
         sim = cosine_similarity(base_embed, cmp_embed)
-        if sim < 0.5:
+        print(f"[SIM DEBUG] Сходство с '{entry.get('title', '')[:40]}...': {sim:.4f}")
+        if sim < 0.3:
             continue
         records.append({
             'Источник': urlparse(link).netloc,
