@@ -16,7 +16,7 @@ HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
 # Endpoints
 HF_EMBEDDING_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
-HF_SUMMARIZER_URL = "https://api-inference.huggingface.co/models/sshleifer/distilbart-cnn-12-6"
+HF_SUMMARIZER_URL = "https://api-inference.huggingface.co/models/google/pegasus-xsum"
 HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 def fetch_text_from_url(url: str) -> str:
@@ -51,6 +51,9 @@ def summarize_text(text: str) -> str:
             if isinstance(result, list) and result and 'summary_text' in result[0]:
                 print("[SUMMARY OK]", result[0]['summary_text'][:100])
                 return result[0]['summary_text']
+            elif isinstance(result, dict) and 'summary_text' in result:
+                print("[SUMMARY OK dict]", result['summary_text'][:100])
+                return result['summary_text']
             else:
                 print(f"[SUMMARY FORMAT ERROR] {result}")
                 return cleaned
@@ -63,13 +66,14 @@ def summarize_text(text: str) -> str:
 
 def get_embedding(text: str) -> list:
     try:
-        response = requests.post(HF_EMBEDDING_URL, headers=HEADERS, json={"inputs": text[:512]})
+        response = requests.post(HF_EMBEDDING_URL, headers=HEADERS, json={"inputs": [text[:512]]})
         print(f"[EMBEDDING STATUS] {response.status_code}")
         if response.status_code == 200:
-            return response.json()[0]
-        else:
-            print(f"[EMBEDDING ERROR] {response.text}")
-            return []
+            result = response.json()
+            if isinstance(result, list) and result:
+                return result[0]
+        print(f"[EMBEDDING ERROR] {response.text}")
+        return []
     except Exception as e:
         print(f"[EMBEDDING EXCEPTION] {e}")
         return []
