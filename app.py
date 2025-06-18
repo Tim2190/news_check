@@ -16,7 +16,7 @@ HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
 # Endpoints
 HF_EMBEDDING_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
-HF_SUMMARIZER_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+HF_SUMMARIZER_URL = "https://api-inference.huggingface.co/models/sshleifer/distilbart-cnn-12-6"
 HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 def fetch_text_from_url(url: str) -> str:
