@@ -6,18 +6,19 @@ import pandas as pd
 from urllib.parse import urlparse, quote
 from difflib import SequenceMatcher
 import dateparser
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 
-# Попробуем загрузить KeyBERT, иначе используем TF-IDF
-USE_KEYBERT = False
-try:
-    from keybert import KeyBERT
-    keybert_model = KeyBERT('all-MiniLM-L6-v2')
-    USE_KEYBERT = True
-except ImportError:
-    from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+# Встроенный список русских стоп-слов
+RUSSIAN_STOPWORDS = [
+    "и", "в", "во", "не", "что", "он", "на", "я", "с", "со", "как",
+    "а", "то", "все", "она", "так", "его", "но", "да", "ты", "к",
+    "у", "же", "вы", "за", "бы", "по", "только", "ее", "мне", "было",
+    "вот", "от", "меня", "еще", "нет", "о", "из", "ему", "теперь"
+]
+
+USE_KEYBERT = False  # Отключено — не используется на Python 3.13
 
 def fetch_text_from_url(url: str) -> str:
-    """Parse article text from URL using BeautifulSoup."""
     try:
         response = requests.get(url, timeout=10)
     except Exception:
@@ -39,36 +40,32 @@ def fetch_text_from_url(url: str) -> str:
 
 
 def extract_key_phrases(text: str, n: int = 5) -> list:
-    """Extract key phrases using KeyBERT or TF-IDF fallback."""
     try:
-        if USE_KEYBERT:
-            keywords = keybert_model.extract_keywords(
-                text,
-                keyphrase_ngram_range=(1, 2),
-                stop_words='russian',
-                top_n=n
-            )
-            return [kw for kw, _ in keywords if kw.strip()]
-        else:
-            # Fallback: разбиваем текст для TF-IDF
-            sentences = [s.strip() for s in text.split('.') if len(s.strip().split()) > 3]
-            if len(sentences) < 2:
-                sentences = [text, text]  # дублируем для имитации корпуса
+        if len(text.strip().split()) < 10:
+            return []
 
-            vectorizer = CountVectorizer(stop_words='russian', ngram_range=(1, 2))
-            counts = vectorizer.fit_transform(sentences)
-            tfidf = TfidfTransformer().fit_transform(counts)
-            scores = tfidf.toarray().sum(axis=0)
-            terms = vectorizer.get_feature_names_out()
-            sorted_items = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
-            return [term for term, _ in sorted_items[:n]]
+        sentences = [s.strip() for s in text.split('.') if len(s.strip().split()) > 3]
+        if len(sentences) < 2:
+            sentences = [text, text]
+
+        vectorizer = CountVectorizer(stop_words=RUSSIAN_STOPWORDS, ngram_range=(1, 2))
+        counts = vectorizer.fit_transform(sentences)
+
+        if counts.shape[1] == 0:
+            return []
+
+        tfidf = TfidfTransformer().fit_transform(counts)
+        scores = tfidf.toarray().sum(axis=0)
+        terms = vectorizer.get_feature_names_out()
+        sorted_items = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
+        phrases = [term for term, _ in sorted_items[:n]]
+        return phrases
     except Exception as e:
         print(f"[ERROR in extract_key_phrases]: {e}")
         return []
 
 
 def search_google_news(phrase: str) -> list:
-    """Search Google News RSS for the phrase and return entries."""
     query = quote(phrase)
     url = f"https://news.google.com/rss/search?q={query}&hl=ru&gl=KZ&ceid=KZ:ru"
     feed = feedparser.parse(url)
@@ -76,7 +73,6 @@ def search_google_news(phrase: str) -> list:
 
 
 def compute_similarity(text1: str, text2: str) -> float:
-    """Return similarity between two texts using SequenceMatcher."""
     matcher = SequenceMatcher(None, text1, text2)
     return matcher.ratio()
 
@@ -84,7 +80,10 @@ def compute_similarity(text1: str, text2: str) -> float:
 def process_search(article_text: str, phrases: list) -> pd.DataFrame:
     records = []
     seen_urls = set()
-    for phrase in phrases:
+    unique_phrases = list({p for p in phrases if len(p.strip()) > 2})
+
+    for phrase in unique_phrases:
+        print(f"\n🔍 Поисковая фраза: {phrase}")
         entries = search_google_news(phrase)
         for entry in entries[:10]:
             link = entry.get('link')
@@ -98,6 +97,8 @@ def process_search(article_text: str, phrases: list) -> pd.DataFrame:
             if not fetched_text:
                 continue
             similarity = compute_similarity(article_text, fetched_text)
+            print(f"→ Заголовок: {snippet}")
+            print(f"→ Сходство: {similarity:.3f}")
             if similarity < 0.5:
                 continue
             records.append({
